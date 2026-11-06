@@ -1,0 +1,5 @@
+.cursor/
+plugin/bin/
+plugin/obj/
+*.dll.bak*
+*.pdb
