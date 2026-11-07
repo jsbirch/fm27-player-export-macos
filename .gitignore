@@ -3,3 +3,7 @@ plugin/bin/
 plugin/obj/
 *.dll.bak*
 *.pdb
+companion/.build/
+companion/.swiftpm/
+dist/
+.DS_Store
