@@ -52,6 +52,8 @@ bash build_companion.sh /path/to/output
 
 The checks exercise URL escaping, capture application restrictions, and metadata preservation. The offline pipeline check renders a synthetic player card and runs the actual PNG writer, Vision OCR, JSON writer and atomic capture storage without recording the screen or opening a chat. The companion is built and ad-hoc signed locally, not Developer ID notarized. Binary builds target the architecture of the Mac that builds them. FM27 is the primary target; FM26 is recognized but needs a live smoke test on your setup.
 
+Live validation: an FM27 individual player profile was captured at 2940 × 1656 on Apple Silicon, recognized by Vision, saved with its metadata, and shared into a local chat. Screen Recording permission was granted through macOS Settings.
+
 Troubleshooting:
 
 - **No capture:** confirm the FM menu app is running, Screen Recording is enabled, and FM26/FM27 is frontmost. Try **FM → Capture player profile** to distinguish a hotkey conflict from a capture problem.
