@@ -1,67 +1,85 @@
 # FM Player Profile Bridge — macOS
 
-Press **Control–Option–Command–P** in Football Manager to capture a player's current profile and prepare a chat with it.
+Press **Control–Option–Command–P** in FM27 to export a player's visible profile **as text** and prepare a chat with it. No image or OCR is used by the default shortcut.
 
-This fork adds a native Mac menu-bar companion to [oeknudsen's FM27 table exporter](https://github.com/oeknudsen/fm27-player-export-macos). The companion captures an individual player screen without requiring BepInEx, Rosetta, an API key or a game restart. The original table-export plugin remains below.
+This fork extends [oeknudsen's FM27 table exporter](https://github.com/oeknudsen/fm27-player-export-macos) with a direct profile-text plugin and native Mac menu-bar companion. The original F9 table export remains available.
 
-## Install the profile shortcut
+## Install
 
-Requires **macOS 14 or later**, Football Manager 26 or 27, and the **ChatGPT/Codex desktop app** for the prepared-chat handoff. Build on your Mac with Apple's Command Line Tools (`xcode-select --install`); there are no third-party Swift packages.
+Requires an **Apple Silicon Mac**, **macOS 14 or later**, **Football Manager 27 through Steam**, the game's **English UI**, and the **ChatGPT/Codex desktop app** for the prepared-chat handoff.
 
-```bash
-git clone https://github.com/jsbirch/fm27-player-export-macos.git
-cd fm27-player-export-macos
-bash install_companion.sh
+1. Install [codexx01's FM27 BepInEx package](https://sortitoutsi.net/content/78080/fm27-bepinex-6-il2cpp-for-macos-apple-silicon-latest-macos-no-game-files-modified), based on sptndc's loader. Put its `FM27-BepInEx` folder beside `fm.app` in your Steam game directory. Follow the package's installation instructions.
+2. Install Rosetta 2 if needed: `softwareupdate --install-rosetta --agree-to-license`.
+3. Clone this fork and install the plugin and companion:
+
+   ```bash
+   git clone https://github.com/jsbirch/fm27-player-export-macos.git
+   cd fm27-player-export-macos
+   bash install_plugin.sh
+   bash install_companion.sh
+   ```
+
+The companion builds with Apple's Command Line Tools (`xcode-select --install`). No third-party Swift packages or API key are required. The plugin installer copies the prebuilt DLL; .NET is needed only when rebuilding it.
+
+The app installs to `~/Applications/FM Profile Bridge.app`. Look for **FM** in the menu bar. **Screen Recording and Accessibility permissions are not needed for text export.**
+
+Installation can finish while FM27 is running. The plugin takes effect on the next launch through BepInEx. **Save and quit the game when you are ready**, leave Steam open, then choose **FM → Launch FM27 with text export**. The first launch may take several minutes to prepare the loader's shadow game copy and references.
+
+The menu launcher uses Steam's default library path. For another library, set `FM27_BEP` when installing the plugin and configure the loader's Steam launch option using its actual path:
+
+```text
+"/your/game/folder/FM27-BepInEx/run_fm27_bepinex.sh" %command%
 ```
 
-The installer builds `~/Applications/FM Profile Bridge.app` and opens it. Look for **FM** in the menu bar. Enable **FM Profile Bridge** in **System Settings → Privacy & Security → Screen & System Audio Recording** (called Screen Recording on older macOS), then quit and reopen the companion if macOS asks. Audio is never captured. Accessibility permission is not required.
+Without that Steam launch option, starting FM27 normally from Steam runs without the text-export plugin. Use the FM menu launcher for text export. The original `fm.app` is not changed.
 
 ## Share a player
 
-1. Open a player's **Overview** or **Attributes** tab and keep Football Manager in front.
+1. Load your save, open an individual player's **Overview** or **Attributes** tab and make the attribute panels visible. Keep FM27 in front.
 2. Press **⌃⌥⌘P** (Control–Option–Command–P).
-3. Wait for the capture and local text recognition. A new local chat opens with the screenshot and metadata paths in its prepared prompt. **Press Enter to send.**
+3. A new chat opens with the exported text in its prompt. **Press Enter to send.**
 
-The [documented desktop deep link](https://learn.chatgpt.com/docs/app/commands#deep-links) fills the composer; it does **not** automatically send a message. The receiving local chat can read the saved image. The shortcut does not inject keystrokes into chats or overwrite your clipboard.
+The companion uses the desktop app's `codex://new` deep link to prepare the composer. It does not send a message or inject keystrokes. To use an existing chat, choose **FM → Copy latest prompt for this chat**, then paste and send it there. Direct text also works in a web chat.
 
-To share in an **existing local chat**, choose **FM → Copy latest prompt for this chat**, then paste and send it there. For a web or remote chat that cannot read this Mac's files, choose **Copy latest screenshot** and paste the image instead.
+The plugin reads visible game UI text on Unity's main thread. It checks for attribute-panel headings, excludes hidden/offscreen elements and tooltips, preserves masked ranges, and orders text by its on-screen position. Only the **current tab** is exported. It does not recover hidden ability, potential or unseen tabs. Graphical information such as star icons may be absent; do not infer it from missing text. Profile detection and layout grouping are heuristic and currently require English. If the text is incomplete or ambiguous, use the explicit screenshot option to check it.
 
-Only the **current game window and tab** are captured. Open other tabs and repeat to share contracts, reports or history. Hidden attributes and obscured information are not recovered. OCR is a convenience and can mix columns or misread values; the image is the primary source. No player capture is committed to this repository.
-
-Each capture is stored locally under:
+Each export is stored locally under:
 
 ```text
 ~/Library/Application Support/FM Profile Bridge/Captures/<timestamp>_<id>/
-    profile.png   Original game-window screenshot at display resolution
-    profile.json  Source, timestamp, dimensions, OCR text/confidence/coordinates
-    ocr.txt       Unstructured OCR transcript
-    prompt.txt    Ready-to-paste prompt with local file paths
+    profile.txt   Visible game UI text, grouped into rows
+    ui.tsv        Local diagnostic text, bounds and element paths
+    prompt.txt    Ready-to-paste assessment prompt
 ```
 
-Use **FM → Show all captures** to inspect or delete them. Captures remain until you delete them; the companion has no server or background uploader. Text recognition uses Apple's Vision framework on your Mac. Sending the prepared chat shares the referenced profile with your assistant.
+`ui.tsv` is not included in the prepared prompt. Use **Show all captures** to inspect or delete saved exports. The helper has no server or background uploader. Sending the prepared chat shares the profile text with your assistant.
+
+## Optional screenshot capture
+
+**FM → Capture screenshot instead…** retains the earlier screenshot/OCR workflow for FM26 or FM27. It requires Screen Recording permission and saves `profile.png`, `profile.json`, `ocr.txt` and `prompt.txt`. Only the game window is captured. OCR can misread values and mix columns, so this separate workflow asks the assistant to check the image. A failed direct-text export never silently falls back to an image.
 
 ## Build and verify
 
 ```bash
 swift run --package-path companion ProfileCoreChecks
 swift run --package-path companion FMProfileBridge --check-pipeline
-bash build_companion.sh                  # dist/FM Profile Bridge.app
-# Or choose a destination (including paths with spaces):
-bash build_companion.sh /path/to/output
+bash build_companion.sh                   # dist/FM Profile Bridge.app
+bash build_plugin.sh                      # requires .NET SDK and generated BepInEx interop
+bash install_plugin.sh
 ```
 
-The checks exercise URL escaping, capture application restrictions, and metadata preservation. The offline pipeline check renders a synthetic player card and runs the actual PNG writer, Vision OCR, JSON writer and atomic capture storage without recording the screen or opening a chat. The companion is built and ad-hoc signed locally, not Developer ID notarized. Binary builds target the architecture of the Mac that builds them. FM27 is the primary target; FM26 is recognized but needs a live smoke test on your setup.
+`build_plugin.sh` uses the loader in Steam's default library, or `FM27_BEP` if set. BepInEx normally generates the interop references on first launch. The companion checks cover URL encoding, direct-text handoff with masked/missing values, application restrictions, metadata, and the optional screenshot/OCR pipeline.
 
-Live validation: an FM27 individual player profile was captured at 2940 × 1656 on Apple Silicon, recognized by Vision, saved with its metadata, and shared into a local chat. Screen Recording permission was granted through macOS Settings.
+**Validation status:** the v2 companion and v5.2 plugin compile; automated companion checks pass. Direct export still needs an end-to-end test after FM27 restarts with the loader. The earlier screenshot workflow was verified with a live FM27 profile. Do not treat the new UI extraction as live-verified yet.
 
-Troubleshooting:
+## Troubleshooting
 
-- **No capture:** confirm the FM menu app is running, Screen Recording is enabled, and FM26/FM27 is frontmost. Try **FM → Capture player profile** to distinguish a hotkey conflict from a capture problem.
-- **No game window found:** bring FM to the front and unminimize it. The companion deliberately never falls back to capturing your whole desktop.
-- **A non-player screen was captured:** open an individual player's Overview/Attributes and capture again. The helper captures the screen you choose; it does not identify or navigate players for you.
-- **Chat doesn't open:** install/update the ChatGPT/Codex desktop app or use **Copy latest screenshot**. Saved captures remain available.
-- **Updating:** quit the companion via its FM menu, pull changes and rerun `bash install_companion.sh`. macOS may ask you to re-enable recording permission after rebuilding.
-- **Uninstalling:** quit, move `~/Applications/FM Profile Bridge.app` to Trash, and optionally remove its captures folder. The game installation is untouched by the companion.
+- **Plugin isn't running:** save and quit FM27, then use **FM → Launch FM27 with text export** with Steam open. Check `FM27-BepInEx/launch.log`, `fm27_doorstop.log`, and `BepInEx/LogOutput.log` if startup fails.
+- **Unsupported screen:** open one player's Overview/Attributes, with English attribute panels visible, and capture again. Other screens and languages are not currently supported by the profile check.
+- **Shortcut does nothing:** check the FM menu app is running and FM27 is in front. Try **Capture player profile** in the menu to check for a hotkey conflict.
+- **Chat doesn't open:** use **Copy latest prompt for this chat**. Saved exports remain available.
+- **Updating:** quit the companion, pull changes and rerun both install scripts. Restart the game when ready to load a new plugin. The plugin installer keeps old DLLs outside the active plugins directory.
+- **Uninstalling:** quit the companion, remove its app and optionally its captures. Remove `BepInEx/plugins/FM27PlayerExport` to uninstall the plugin. Clear any loader Steam launch option to return to normal Steam launches.
 
 ---
 
@@ -69,9 +87,9 @@ Troubleshooting:
 
 Export **Football Manager 27** player and staff tables to **CSV + HTML**. Load a view, select players, press **F9**.
 
-It only reads the on-screen FM27 UI — it does not read your save, touch game memory, or modify any game files.
+It exports game UI text without reading save files or hidden player attributes. The loader runs a separate shadow copy of the game; the original game bundle remains unchanged.
 
-**Credits / lineage:** original **FM26 Player Export** by **vinteset** → macOS fork by **DadMych** ([repo](https://github.com/DadMych/fm26-player-export-macos), MIT) → this **FM27 port**. Runs on **sptndc's FM27 BepInEx** loader ([sortitoutsi thread](https://sortitoutsi.net/content/78080/fm27-bepinex-6-il2cpp-for-macos-apple-silicon-latest-macos-no-game-files-modified)).
+**Credits / lineage:** original **FM26 Player Export** by **vinteset** → macOS fork by **DadMych** ([repo](https://github.com/DadMych/fm26-player-export-macos), MIT) → this **FM27 port**. Runs on **codexx01's FM27 BepInEx package**, based on sptndc's loader ([sortitoutsi thread](https://sortitoutsi.net/content/78080/fm27-bepinex-6-il2cpp-for-macos-apple-silicon-latest-macos-no-game-files-modified)).
 
 **Maintained by:** [oeknudsen](https://github.com/oeknudsen)
 
@@ -81,12 +99,12 @@ It only reads the on-screen FM27 UI — it does not read your save, touch game m
 
 - macOS on **Apple Silicon** (M1–M4), tested on macOS 27
 - **Football Manager 27** (Steam)
-- **sptndc's FM27 BepInEx** (the mod loader — install this first): https://sortitoutsi.net/content/78080/fm27-bepinex-6-il2cpp-for-macos-apple-silicon-latest-macos-no-game-files-modified
+- **codexx01's FM27 BepInEx package** (the mod loader — install this first): https://sortitoutsi.net/content/78080/fm27-bepinex-6-il2cpp-for-macos-apple-silicon-latest-macos-no-game-files-modified
 - **Rosetta 2**
 
 ## Installation
 
-1. Install **sptndc's FM27 BepInEx** and set its Steam launch option. **Replace the `USERNAME` placeholder** in that launch option with your real macOS username.
+1. Install **codexx01's FM27 BepInEx package** and set its Steam launch option. **Replace the `USERNAME` placeholder** in that launch option with your real macOS username.
 2. Install Rosetta 2:
    ```bash
    softwareupdate --install-rosetta --agree-to-license
@@ -113,7 +131,7 @@ It only reads the on-screen FM27 UI — it does not read your save, touch game m
 
 - **`Failed to start process for this game : OS Error 260`** → install Rosetta (step 2).
 - **Game won't launch / no log** → the Steam launch option still has the literal `USERNAME`; replace it with your macOS username.
-- **F9 does nothing** → confirm sptndc's BepInEx loaded (a `BepInEx/LogOutput.log` exists) and that you pressed F9 on a Squad or Player Search screen.
+- **F9 does nothing** → confirm the FM27 BepInEx loader loaded (a `BepInEx/LogOutput.log` exists) and that you pressed F9 on a Squad or Player Search screen.
 - **Rows empty / only one column** → use a view with real attribute columns and keep hands off the mouse during scroll.
 
 ## Known limitations

@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     private var busy = false
+    private var launchProcess: Process?
     private let defaults = UserDefaults.standard
     private var latest: URL? {
         get { defaults.string(forKey: "latestCapture").map { URL(fileURLWithPath: $0, isDirectory: true) } }
@@ -45,22 +46,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         statusLine = menu.addItem(withTitle: "Ready · ⌃⌥⌘P", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
+        add("Launch FM27 with text export", action: #selector(launchGame), to: menu)
         captureItem = add("Capture player profile", action: #selector(captureFromMenu), to: menu)
         captureItem.keyEquivalent = "p"
         captureItem.keyEquivalentModifierMask = [.control, .option, .command]
+        add("Capture screenshot instead…", action: #selector(captureScreenshot), to: menu)
         add("Open latest profile in a new chat", action: #selector(openLatestChat), to: menu)
         add("Copy latest prompt for this chat", action: #selector(copyPrompt), to: menu)
         add("Copy latest screenshot", action: #selector(copyScreenshot), to: menu)
         add("Show latest capture", action: #selector(showLatest), to: menu)
         menu.addItem(.separator())
         add("Show all captures", action: #selector(showCaptures), to: menu)
-        add("Help & screen recording permission…", action: #selector(showHelp), to: menu)
+        add("Help & setup…", action: #selector(showHelp), to: menu)
         menu.addItem(.separator())
         add("Quit FM Profile Bridge", action: #selector(quit), to: menu)
         statusItem.menu = menu
         registerShortcut()
-        if !defaults.bool(forKey: "hasShownWelcome") {
-            defaults.set(true, forKey: "hasShownWelcome")
+        if !defaults.bool(forKey: "hasShownTextExportWelcome") {
+            defaults.set(true, forKey: "hasShownTextExportWelcome")
             showHelp()
         }
     }
@@ -92,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func captureFromShortcut() {
         guard GamePolicy.isFootballManager(NSWorkspace.shared.frontmostApplication?.bundleIdentifier) else {
-            statusLine.title = "Open a player in FM26 or FM27 first"
+            statusLine.title = "Open a player in FM27 first"
             NSSound.beep()
             return
         }
@@ -101,7 +104,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func captureFromMenu() { capture() }
 
+    @objc private func launchGame() {
+        guard launchProcess?.isRunning != true else {
+            showAlert("FM27 is starting or running", "The loader may take a few minutes on its first launch. Wait for the game to open.")
+            return
+        }
+        guard !NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "com.SportsInteractive.FootballManager27" }) else {
+            showAlert("FM27 is already running", "Save and quit FM27 first, then choose this menu item to start it with the text-export plugin.")
+            return
+        }
+        let launcher = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Steam/steamapps/common/Football Manager 27/FM27-BepInEx/run_fm27_bepinex.sh")
+        guard FileManager.default.fileExists(atPath: launcher.path) else {
+            showAlert("FM27 loader not found", "Install the FM27 BepInEx loader beside fm.app in your Steam game folder. If you use another Steam library, configure that loader's Steam launch option and launch from Steam.")
+            return
+        }
+        guard NSWorkspace.shared.runningApplications.contains(where: { $0.bundleIdentifier == "com.valvesoftware.steam" }) else {
+            showAlert("Open Steam first", "Open Steam and sign in, then choose “Launch FM27 with text export” again.")
+            return
+        }
+        do {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = [launcher.path]
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            process.terminationHandler = { [weak self] process in
+                let status = process.terminationStatus
+                Task { @MainActor in
+                    self?.launchProcess = nil
+                    self?.statusLine.title = status == 0 ? "Ready · ⌃⌥⌘P" : "Game exited · check the loader's launch.log"
+                    if status != 0 {
+                        self?.showAlert("FM27 loader stopped", "The game or loader exited with code \(status). Details are in FM27-BepInEx/launch.log beside the loader. You can still start the unmodified game from Steam.")
+                    }
+                }
+            }
+            try process.run()
+            launchProcess = process
+            statusLine.title = "Starting FM27 with the text-export plugin…"
+        } catch { showAlert("Couldn’t start FM27", error.localizedDescription) }
+    }
+
     private func capture() {
+        guard !busy else { return }
+        busy = true
+        captureItem.isEnabled = false
+        statusItem.button?.title = "FM…"
+        statusLine.title = "Exporting profile text from the game…"
+        Task {
+            defer {
+                busy = false
+                captureItem.isEnabled = true
+                statusItem.button?.title = "FM"
+            }
+            do {
+                let directory = try await DirectProfileCapture.capture()
+                latest = directory
+                statusLine.title = "Text exported · press Enter in the prepared chat"
+                openChat(directory)
+            } catch {
+                statusLine.title = "Text export failed — see setup"
+                showAlert("Couldn’t export the player", error.localizedDescription)
+            }
+        }
+    }
+
+    @objc private func captureScreenshot() {
         guard !busy else { return }
         guard CGPreflightScreenCaptureAccess() else {
             showHelp()
@@ -135,7 +202,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func latestCapture() -> URL? {
-        guard let latest, FileManager.default.fileExists(atPath: latest.appendingPathComponent("profile.png").path) else {
+        guard let latest, FileManager.default.fileExists(atPath: latest.appendingPathComponent("profile.txt").path)
+                || FileManager.default.fileExists(atPath: latest.appendingPathComponent("profile.png").path) else {
             showAlert("No saved capture", "Open a player in Football Manager and press ⌃⌥⌘P first.")
             return nil
         }
@@ -145,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openChat(_ directory: URL) {
         guard NSWorkspace.shared.open(ProfileHandoff.draftURL(directory: directory)) else {
             statusLine.title = "Saved · open ChatGPT and copy the latest prompt"
-            showAlert("Profile saved", "Install or open the ChatGPT/Codex desktop app, then choose “Open latest profile in a new chat” from the FM menu. You can also copy the latest screenshot and paste it into a chat.")
+            showAlert("Profile saved", "Install or open the ChatGPT/Codex desktop app, then choose “Open latest profile in a new chat” from the FM menu. You can also choose “Copy latest prompt for this chat” and paste it into a chat.")
             return
         }
     }
@@ -162,8 +230,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func copyScreenshot() {
-        guard let directory = latestCapture(),
-              let image = NSImage(contentsOf: directory.appendingPathComponent("profile.png")) else { return }
+        guard let directory = latestCapture() else { return }
+        guard let image = NSImage(contentsOf: directory.appendingPathComponent("profile.png")) else {
+            showAlert("This is a text export", "The direct export doesn't create a screenshot. Use “Capture screenshot instead…” if you want an image.")
+            return
+        }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.writeObjects([image])
         statusLine.title = "Screenshot copied · paste into any chat"
@@ -171,7 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showLatest() {
         if let directory = latestCapture() {
-            NSWorkspace.shared.activateFileViewerSelecting([directory.appendingPathComponent("profile.png")])
+            NSWorkspace.shared.activateFileViewerSelecting([directory])
         }
     }
 
@@ -187,10 +258,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let allowed = CGPreflightScreenCaptureAccess()
         let alert = NSAlert()
         alert.messageText = "Send a player profile with ⌃⌥⌘P"
-        alert.informativeText = "1. Open a player’s Overview or Attributes tab in FM26 or FM27.\n2. Press Control–Option–Command–P.\n3. A new chat opens with the saved screenshot and OCR paths ready. Press Enter to send.\n\nOnly the game window is captured. Text recognition runs on your Mac. The current tab is saved; hidden attributes and other tabs are not included.\n\nTo use an existing chat, choose “Copy latest prompt for this chat” from the FM menu and paste it there.\n\nScreen Recording: \(allowed ? "enabled" : "permission needed")."
-        if !allowed { alert.addButton(withTitle: "Enable Screen Recording…") }
+        alert.informativeText = "1. Open Steam, then choose FM → Launch FM27 with text export. (Save and quit an already running game first.)\n2. Open a player’s Overview or Attributes tab (English UI).\n3. Press Control–Option–Command–P. A new chat opens with the profile's actual text. Press Enter to send.\n\nThe shortcut reads visible game UI text directly: no screenshot, OCR or Screen Recording permission is needed. Hidden attributes and other tabs are not included.\n\nTo use an existing chat, choose “Copy latest prompt for this chat” and paste it there.\n\nOptional screenshot fallback: Screen Recording \(allowed ? "enabled" : "not enabled")."
         alert.addButton(withTitle: "Done")
-        if alert.runModal() == .alertFirstButtonReturn && !allowed {
+        if !allowed { alert.addButton(withTitle: "Enable optional screenshot capture…") }
+        if alert.runModal() == .alertSecondButtonReturn && !allowed {
             if !CGRequestScreenCaptureAccess() {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
             }

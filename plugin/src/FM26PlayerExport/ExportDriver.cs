@@ -41,7 +41,11 @@ public sealed class ExportDriver
 			}
 			if (_currentHandler == null)
 			{
-				bool num = (((ButtonControl)Keyboard.current.leftCtrlKey).isPressed || ((ButtonControl)Keyboard.current.rightCtrlKey).isPressed) && ((ButtonControl)Keyboard.current.pKey).wasPressedThisFrame;
+				// Reserve Control+Option+Command+P for the companion's profile request.
+				bool extraModifiers = Keyboard.current.leftAltKey.isPressed || Keyboard.current.rightAltKey.isPressed
+					|| Keyboard.current.leftMetaKey.isPressed || Keyboard.current.rightMetaKey.isPressed
+					|| Keyboard.current.leftShiftKey.isPressed || Keyboard.current.rightShiftKey.isPressed;
+				bool num = !extraModifiers && (((ButtonControl)Keyboard.current.leftCtrlKey).isPressed || ((ButtonControl)Keyboard.current.rightCtrlKey).isPressed) && ((ButtonControl)Keyboard.current.pKey).wasPressedThisFrame;
 				bool wasPressedThisFrame = ((ButtonControl)Keyboard.current.f9Key).wasPressedThisFrame;
 				if (num || wasPressedThisFrame)
 				{
@@ -91,7 +95,7 @@ public sealed class ExportDriver
 		return num;
 	}
 
-	private VisualElement GetMainRoot()
+	internal VisualElement GetMainRoot()
 	{
 		//IL_002b: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0036: Expected O, but got Unknown

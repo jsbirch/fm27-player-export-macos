@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace FM26PlayerExport;
 
-[BepInPlugin("com.koda.fm26.playerexport", "FM27 Player Export (sptndc/macOS)", "5.1.1-fm27")]
+[BepInPlugin("com.koda.fm26.playerexport", "FM27 Player Export + Profile Bridge", "5.2.0")]
 public class Plugin : BasePlugin
 {
 	internal static ManualLogSource Log;
@@ -21,7 +21,7 @@ public class Plugin : BasePlugin
 		//IL_004b: Unknown result type (might be due to invalid IL or missing references)
 		//IL_0051: Expected O, but got Unknown
 		Log = ((BasePlugin)this).Log;
-		Log.LogInfo((object)"[FM26Export v5.1.1-fm27] Loaded. Hotkeys: [F9 or Ctrl+P] = export.");
+		Log.LogInfo((object)"[FM27Export v5.2.0] Loaded. F9 or Ctrl+P: table export. FM Profile Bridge: direct profile text.");
 		PluginConfig.Init(((BasePlugin)this).Config, Log);
 		_driver = new ExportDriver();
 		try
@@ -43,6 +43,7 @@ public class Plugin : BasePlugin
 
 	internal static void Tick()
 	{
+		if (_driver != null) ProfileRequestBridge.Tick(_driver);
 		_driver?.Tick();
 	}
 

@@ -30,3 +30,15 @@ let decoded = try JSONDecoder().decode(ProfileCapture.self, from: JSONEncoder().
 expect(decoded.textRegions == regions, "Masked ratings, confidence and coordinates survive serialization")
 expect(decoded.schemaVersion == 1 && decoded.imageWidth == 2940, "Version and image dimensions survive serialization")
 print("PASS: Metadata preserves masked ranges, Unicode, OCR confidence and coordinates")
+
+let textDirectory = FileManager.default.temporaryDirectory.appendingPathComponent("fm-text-check-" + UUID().uuidString)
+try FileManager.default.createDirectory(at: textDirectory, withIntermediateDirectories: true)
+defer { try? FileManager.default.removeItem(at: textDirectory) }
+let directText = "Test Player | Passing 12–15 | Tackling 13 | Strength —\n"
+try directText.write(to: textDirectory.appendingPathComponent("profile.txt"), atomically: true, encoding: .utf8)
+let textPrompt = ProfileHandoff.prompt(directory: textDirectory)
+expect(textPrompt.contains(directText.trimmingCharacters(in: .whitespacesAndNewlines)), "Inline direct text preserves masked and missing attributes")
+expect(!textPrompt.contains("profile.png") && !textPrompt.contains("image viewer"), "Direct export must not ask the model to load an image")
+let directQuery = URLComponents(url: ProfileHandoff.draftURL(directory: textDirectory), resolvingAgainstBaseURL: false)!.queryItems!
+expect(directQuery.first(where: { $0.name == "prompt" })?.value == textPrompt, "Direct text survives chat-link encoding")
+print("PASS: Direct text is embedded in the prompt without an image request")
