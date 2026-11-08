@@ -41,18 +41,18 @@ Without that Steam launch option, starting FM27 normally from Steam runs without
 
 The companion uses the desktop app's `codex://new` deep link to prepare the composer. It does not send a message or inject keystrokes. To use an existing chat, choose **FM → Copy latest prompt for this chat**, then paste and send it there. Direct text also works in a web chat.
 
-The plugin reads visible game UI text on Unity's main thread. It checks for attribute-panel headings, excludes hidden/offscreen elements and tooltips, preserves masked ranges, and orders text by its on-screen position. Only the **current tab** is exported. It does not recover hidden ability, potential or unseen tabs. Graphical information such as star icons may be absent; do not infer it from missing text. Profile detection and layout grouping are heuristic and currently require English. If the text is incomplete or ambiguous, use the explicit screenshot option to check it.
+The plugin reads game UI text on Unity's main thread, excluding hidden/offscreen elements and tooltips. Unity can retain background screens in that UI tree, so the companion verifies the active player identity and isolates `ReportBody/PlayerReport/PlayerAttributesBlock`. It pairs each attribute label with a value from the same UI row and section; background coordinates are never used to match values. Masked ranges are preserved exactly, missing or ambiguous values are flagged, and unsupported layouts fail without sending a mixed transcript. Only the **current player's attribute panel** and named fields such as positions, feet, personality and traits are shared. Statistics tables and graphical ratings are omitted. Hidden ability, potential and unseen tabs are not recovered. English UI is currently required.
 
 Each export is stored locally under:
 
 ```text
 ~/Library/Application Support/FM Profile Bridge/Captures/<timestamp>_<id>/
-    profile.txt   Visible game UI text, grouped into rows
-    ui.tsv        Local diagnostic text, bounds and element paths
+    profile.txt   Clean player fields and one attribute/value pair per line
+    ui.tsv        Raw diagnostic text, bounds and element paths (may include cached screens)
     prompt.txt    Ready-to-paste assessment prompt
 ```
 
-`ui.tsv` is not included in the prepared prompt. Use **Show all captures** to inspect or delete saved exports. The helper has no server or background uploader. Sending the prepared chat shares the profile text with your assistant.
+`ui.tsv` is used locally to isolate the player; its raw contents are not included in the prepared prompt. The 2.0.1 companion also cleans older captures when copying or reopening them. This fix works with plugin 5.2.0, so updating the companion alone does not require restarting FM27. Use **Show all captures** to inspect or delete saved exports. The helper has no server or background uploader. Sending the prepared chat shares the profile text with your assistant.
 
 ## Optional screenshot capture
 
@@ -68,9 +68,9 @@ bash build_plugin.sh                      # requires .NET SDK and generated BepI
 bash install_plugin.sh
 ```
 
-`build_plugin.sh` uses the loader in Steam's default library, or `FM27_BEP` if set. BepInEx normally generates the interop references on first launch. The companion checks cover URL encoding, direct-text handoff with masked/missing values, application restrictions, metadata, and the optional screenshot/OCR pipeline.
+`build_plugin.sh` uses the loader in Steam's default library, or `FM27_BEP` if set. BepInEx normally generates the interop references on first launch. The companion checks cover URL encoding, direct-text handoff with masked/missing values, application restrictions, metadata, the optional screenshot/OCR pipeline, and player-panel isolation/attribute pairing regressions.
 
-**Validation status:** the v2 companion and v5.2 plugin compile; automated companion checks pass. Direct export still needs an end-to-end test after FM27 restarts with the loader. The earlier screenshot workflow was verified with a live FM27 profile. Do not treat the new UI extraction as live-verified yet.
+**Validation status:** plugin 5.2.0 has loaded successfully in a running FM27 game and produced direct UI data. Companion 2.0.1 fixes the background-screen mixing found in the first live player capture. The saved failing capture now yields 37 labelled ratings with the Portal content removed. Regression checks cover overlapping background layers, masked ranges, missing/ambiguous values, cached profiles, duplicate comparison panels and old-capture repair. The new formatter has been tested against that saved live capture; validation on additional live layouts remains outstanding.
 
 ## Troubleshooting
 

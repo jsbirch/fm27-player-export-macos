@@ -34,6 +34,7 @@ enum DirectProfileCapture {
                       fm.fileExists(atPath: directory.appendingPathComponent("profile.txt").path) else {
                     throw BridgeError.failed("The game's text export could not be found.")
                 }
+                try DirectProfileText.prepare(directory: directory)
                 try ProfileHandoff.prompt(directory: directory).write(to: directory.appendingPathComponent("prompt.txt"), atomically: true, encoding: .utf8)
                 return directory
             }

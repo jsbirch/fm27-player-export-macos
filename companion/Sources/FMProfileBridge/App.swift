@@ -5,6 +5,18 @@ import ProfileCore
 @main
 struct FMProfileBridgeMain {
     @MainActor static func main() {
+        if CommandLine.arguments.count == 3, CommandLine.arguments[1] == "--prepare-text" {
+            let directory = URL(fileURLWithPath: CommandLine.arguments[2], isDirectory: true)
+            do {
+                let text = try DirectProfileText.prepare(directory: directory)
+                try ProfileHandoff.prompt(directory: directory).write(to: directory.appendingPathComponent("prompt.txt"), atomically: true, encoding: .utf8)
+                print(text)
+            } catch {
+                fputs("Text export failed: \(error.localizedDescription)\n", stderr)
+                exit(1)
+            }
+            return
+        }
         if CommandLine.arguments.contains("--check-pipeline") {
             do { try PipelineChecks.run() }
             catch { fatalError("Capture pipeline check failed: \(error)") }
@@ -66,6 +78,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             defaults.set(true, forKey: "hasShownTextExportWelcome")
             showHelp()
         }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { showHelp() }
+        return true
     }
 
     @discardableResult
